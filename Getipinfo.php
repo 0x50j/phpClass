@@ -8,8 +8,14 @@ class Getipinfo
 	//获取 ip 地址信息的方法函数
 	function getipinfo(argument)
 	{
+		//绕过 CDN 代理IP获取客户真实IP地址
+		if(isset($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+			$list = explode(',',$_SERVER['HTTP_X_FORWARDED_FOR']);
+			$_SERVER['REMOTE_ADDR'] = $list[0];
+		}
+		
 		//调用淘宝的IP地址库获取对应信息
-		$client_ip=$_SERVER['HTTP_X_FORWARDED_FOR'];
+		$client_ip=$_SERVER['REMOTE_ADDR'];
 		$url='http://ip.taobao.com/service/getIpInfo.php?ip='.$client_ip;
 
 		$curl = curl_init();
