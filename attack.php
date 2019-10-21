@@ -1,5 +1,12 @@
 <?php
-
+/**
+ * Created by PhpStorm.
+ * User: Mingo
+ * Date: 2018/1/13
+ * Time: 下午3:28
+ */
+//require_once '../../database.php';    //加载是否开启防注入配置
+define('WEBSCAN_LOG_DIR','attack');
 function webscan_for(){
     //get拦截规则
     $getfilter = "<[^>]*?=[^>]*?&#[^>]*?>|\\b(alert\\(|confirm\\(|expression\\(|prompt\\()|<[^>]*?\\b(onerror|onmousemove|onload|onclick|onmouseover)\\b[^>]*?>|^\\+\\/v(8|9)|\\b(and|or)\\b\\s*?([\\(\\)'\"\\d]+?=[\\(\\)'\"\\d]+?|[\\(\\)'\"a-zA-Z]+?=[\\(\\)'\"a-zA-Z]+?|>|<|\s+?[\\w]+?\\s+?\\bin\\b\\s*?\(|\\blike\\b\\s+?[\"'])|\\/\\*.+?\\*\\/|<\\s*script\\b|\\bEXEC\\b|UNION.+?SELECT|UPDATE.+?SET|INSERT\\s+INTO.+?VALUES|(SELECT|DELETE).+?FROM|(CREATE|ALTER|DROP|TRUNCATE)\\s+(TABLE|DATABASE)";
@@ -12,9 +19,31 @@ function webscan_for(){
     //$webscan_referer = empty($_SERVER['HTTP_REFERER']) ? array() : array('HTTP_REFERER' => $_SERVER['HTTP_REFERER']);
     /**
      * 开始检查
-     */
-    if (!defined('WEBSCAN_SWITCH')) define('WEBSCAN_SWITCH', 0);
-    //if (WEBSCAN_SWITCH) {
+     */ 
+    $inputfilter1 = file_get_contents("php://input");
+    $inputfilter = json_decode($inputfilter1,true);
+    if($inputfilter){
+        if(is_array($inputfilter)){
+            foreach ($inputfilter as $key => $value) {
+                webscan_StopAttack($key, $value, $requestfilter, "GET");
+            } 
+        }else{
+            webscan_StopAttack($inputfilter1, $inputfilter1, $requestfilter, "GET");
+        }
+    }
+
+    if($inputfilter1){
+        if(is_array($inputfilter1)){
+            foreach ($inputfilter1 as $key => $value) {
+                webscan_StopAttack($key, $value, $requestfilter, "GET");
+            } 
+        }else{
+            webscan_StopAttack($inputfilter1, $inputfilter1, $requestfilter, "GET");
+        }
+    }
+       
+
+    
     foreach ($_GET as $key => $value) {
         webscan_StopAttack($key, $value, $getfilter, "GET");
     }
@@ -24,10 +53,10 @@ function webscan_for(){
     foreach ($_COOKIE as $key => $value) {
         webscan_StopAttack($key, $value, $cookiefilter, "COOKIE");
     }
+
     foreach ($_REQUEST as $key => $value) {
         webscan_StopAttack($key, $value, $requestfilter, "REQUEST");
     }
-    //}
 }
 
 function str_check($str) {
@@ -48,13 +77,15 @@ function webscan_StopAttack($StrFiltKey, $StrFiltValue, $ArrFiltReq, $method) {
     ];
     $tableFilter = [
         'C_BET','K_BET', 'K_USER_CASH_RECORD','K_USER','BET_RECORD',
-        'PAY_SET','K_BANK','PAY_OUT_SET','SYS_ADMIN', ';', '`','SCRIPT',
-        '%3B', '%BB', '%BC', '%BD', '%BF', '%C2', '%C3', '%C4',
-        '%C5', '%C6', '%C7', '%CE', '%CF', '%D1', '%D4', '%D5',
-        '%D6', '%D8', '%E3', '%E4', '%E5', '%E6', '%E7', '%EB',
-        '%EE', '%EF', '%F1', '%F4', '%F5', '%F6', '%F8', '%FB',
-        '%FF',
+        'PAY_SET','K_BANK','PAY_OUT_SET','SYS_ADMIN', '`','SCRIPT',
+//        ';', '%3B', '%BB', '%BC', '%BD', '%BF', '%C2', '%C3', '%C4',
+//        '%C5', '%C6', '%C7', '%CE', '%CF', '%D1', '%D4', '%D5',
+//        '%D6', '%D8', '%E3', '%E4', '%E5', '%E6', '%E7', '%EB',
+//        '%EE', '%EF', '%F1', '%F4', '%F5', '%F6', '%F8', '%FB',
+//        '%FF',
     ];
+
+    $fieldArr = ['BBFC_BET', 'FC_BET', 'EGTC_BET','PK_BET'];
     $StrFiltValue = str_check($StrFiltValue);
     $StrFiltValue = strtoupper(webscan_arr_foreach($StrFiltValue));
     if (preg_match("/" . $ArrFiltReq . "/is", $StrFiltValue) == 1) {
@@ -66,6 +97,9 @@ function webscan_StopAttack($StrFiltKey, $StrFiltValue, $ArrFiltReq, $method) {
         exit(webscan_pape());
     }
     foreach ($tableFilter as $val){
+        foreach ($fieldArr as $item) {
+            $StrFiltValue = str_replace($item, '', $StrFiltValue);
+        }
         if (strpos($StrFiltValue, $val) !== false){
             webscan_slog(array('ip' => attack_get_ip(), 'time' => strftime("%Y-%m-%d %H:%M:%S"), 'page' => $_SERVER["PHP_SELF"], 'method' => $method, 'rkey' => $StrFiltKey, 'rdata' => $StrFiltKey, 'user_agent' => $_SERVER['HTTP_USER_AGENT'], 'request_url' => $_SERVER["REQUEST_URI"]));
             exit(webscan_pape());
@@ -80,10 +114,24 @@ function webscan_StopAttack($StrFiltKey, $StrFiltValue, $ArrFiltReq, $method) {
             exit(webscan_pape());
         }
     }
-    $crucial = ["[u|U](%[0-9a-zA-Z]+)?[p|P](%[0-9a-zA-Z]+)?[d|D](%[0-9a-zA-Z]+)?[a|A](%[0-9a-zA-Z]+)?[t|T](%[0-9a-zA-Z]+)?[e|E]",
-    "[s|S](%[0-9a-zA-Z]+)?[e|E](%[0-9a-zA-Z]+)?[l|L](%[0-9a-zA-Z]+)?[e|E](%[0-9a-zA-Z]+)?[c|C](%[0-9a-zA-Z]+)?[t|T]"];
+
+    $crucial = ["[k|K](%[0-9a-zA-Z]{1,8})*[_](%[0-9a-zA-Z]{1,8})*[u|U](%[0-9a-zA-Z]{1,8})*[s|S](%[0-9a-zA-Z]{1,8})*[e|E](%[0-9a-zA-Z]{1,8})*[r|R]",
+                "[k|K](%[0-9a-zA-Z]{1,8})*[_](%[0-9a-zA-Z]{1,8})*[b|B](%[0-9a-zA-Z]{1,8})*[a|A](%[0-9a-zA-Z]{1,8})*[n|N](%[0-9a-zA-Z]{1,8})*[k|K]",
+                "[c|C](%[0-9a-zA-Z]{1,8})*[_](%[0-9a-zA-Z]{1,8})*[b|B](%[0-9a-zA-Z]{1,8})*[e|E](%[0-9a-zA-Z]{1,8})*[t|T]",
+
+                "[d|D](%[0-9a-zA-Z]{1,8})*[e|E](%[0-9a-zA-Z]{1,8})*[l|L](%[0-9a-zA-Z]{1,8})*[e|E](%[0-9a-zA-Z]{1,8})*[t|T](%[0-9a-zA-Z]{1,8})*[e|E](%[0-9a-zA-Z]{1,8})*[f|F](%[0-9a-zA-Z]{1,8})*[r|R](%[0-9a-zA-Z]{1,8})*[o|O](%[0-9a-zA-Z]{1,8})*[m|M]",
+                "[r|R](%[0-9a-zA-Z]{1,8})*[e|E](%[0-9a-zA-Z]{1,8})*[p|P](%[0-9a-zA-Z]{1,8})*[l|L](%[0-9a-zA-Z]{1,8})*[a|A](%[0-9a-zA-Z]{1,8})*[c|C](%[0-9a-zA-Z]{1,8})*[e|E](%[0-9a-zA-Z]{1,8})*[u|U](%[0-9a-zA-Z]{1,8})*[p|P](%[0-9a-zA-Z]{1,8})*[d|D](%[0-9a-zA-Z]{1,8})*[a|A](%[0-9a-zA-Z]{1,8})*[t|T](%[0-9a-zA-Z]{1,8})*[e|E]",
+                "[u|U](%[0-9a-zA-Z]{1,8})*[p|P](%[0-9a-zA-Z]{1,8})*[d|D](%[0-9a-zA-Z]{1,8})*[a|A](%[0-9a-zA-Z]{1,8})*[t|T](%[0-9a-zA-Z]{1,8})*[e|E]",
+				"[u|U](%[0-9a-zA-Z]{1,8})*[n|N](%[0-9a-zA-Z]{1,8})*[i|I](%[0-9a-zA-Z]{1,8})*[o|O](%[0-9a-zA-Z]{1,8})*[n|N]",//UNION
+                "[d|D](%[0-9a-zA-Z]{1,8})*[r|R](%[0-9a-zA-Z]{1,8})*[o|O](%[0-9a-zA-Z]{1,8})*[p|P]",
+                "[t|T](%[0-9a-zA-Z]{1,8})*[r|R](%[0-9a-zA-Z]{1,8})*[u|U](%[0-9a-zA-Z]{1,8})*[n|N](%[0-9a-zA-Z]{1,8})*[c|C](%[0-9a-zA-Z]{1,8})*[a|A](%[0-9a-zA-Z]{1,8})*[t|T](%[0-9a-zA-Z]{1,8})*[e|E]",
+                "[s|S](%[0-9a-zA-Z]{1,8})*[l|L](%[0-9a-zA-Z]{1,8})*[e|E](%[0-9a-zA-Z]{1,8})*[e|E](%[0-9a-zA-Z]{1,8})*[p|P]",
+                "[a|A](%[0-9a-zA-Z]{1,8})*[l|L](%[0-9a-zA-Z]{1,8})*[t|T](%[0-9a-zA-Z]{1,8})*[e|E](%[0-9a-zA-Z]{1,8})*[r|R]",
+                "[s|S](%[0-9a-zA-Z]{1,8})*[e|E](%[0-9a-zA-Z]{1,8})*[l|L](%[0-9a-zA-Z]{1,8})*[e|E](%[0-9a-zA-Z]{1,8})*[c|C](%[0-9a-zA-Z]{1,8})*[t|T]"];
+				
+    $StrFiltValue = str_replace("+", '', urlencode($StrFiltValue));
     foreach ($crucial as $value) {
-        if (preg_match("/" . $value . "/is" , urlencode($StrFiltValue)) == 1) {
+        if (preg_match("/" . $value . "/is" , $StrFiltValue) == 1) {
             webscan_slog(array('ip' => attack_get_ip(), 'time' => strftime("%Y-%m-%d %H:%M:%S"), 'page' => $_SERVER["PHP_SELF"], 'method' => $method, 'rkey' => $StrFiltKey, 'rdata' => $StrFiltKey, 'user_agent' => $_SERVER['HTTP_USER_AGENT'], 'request_url' => $_SERVER["REQUEST_URI"]));
             exit(webscan_pape());
         }
@@ -115,7 +163,6 @@ function webscan_arr_foreach($arr) {
  */
 function webscan_slog($logs) {
     $data = json_encode($logs);
-    //WEBSCAN_LOG_DIR
     runattacklog($data, 0);
 }
 
@@ -125,7 +172,7 @@ function runattacklog($log, $halt = 0) {
     $file = "attacklog";
     $mtime = explode(' ', microtime());
     $yearmonth = date('Ym', $mtime[1]);
-    $logdir = WEBSCAN_LOG_DIR_WEB;
+    $logdir = WEBSCAN_LOG_DIR;
     if (!is_dir($logdir))
         mkdir($logdir, 0777);
     $logfile = $logdir . $yearmonth . '_' . $file . '.php';
@@ -158,47 +205,30 @@ function runattacklog($log, $halt = 0) {
  */
 function webscan_pape() {
     //header('Location: /');
-    echo '<script>alert("您提交的内容有敏感字符串,请检查后重新提交");</script>';
+    echo '<script>alert("您提交的内容有敏感字符串,请检查后重新提交");window.history.go(-1); </script>';
+
 }
 
 /**
  * 获取IP
  */
 function attack_get_ip(){
-    $realip = '';
-    $unknown = 'unknown';
-    if (isset($_SERVER)){
-        if(isset($_SERVER['HTTP_X_FORWARDED_FOR']) && !empty($_SERVER['HTTP_X_FORWARDED_FOR']) && strcasecmp($_SERVER['HTTP_X_FORWARDED_FOR'], $unknown)){
-            $arr = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
-            foreach($arr as $ip){
-                $ip = trim($ip);
-                if ($ip != 'unknown'){
-                    $realip = $ip;
-                    break;
-                }
-            }
-        }else if(isset($_SERVER['HTTP_CLIENT_IP']) && !empty($_SERVER['HTTP_CLIENT_IP']) && strcasecmp($_SERVER['HTTP_CLIENT_IP'], $unknown)){
-            $realip = $_SERVER['HTTP_CLIENT_IP'];
-        }else if(isset($_SERVER['REMOTE_ADDR']) && !empty($_SERVER['REMOTE_ADDR']) && strcasecmp($_SERVER['REMOTE_ADDR'], $unknown)){
-            $realip = $_SERVER['REMOTE_ADDR'];
-        }else{
-            $realip = $unknown;
-        }
-    }else{
-        if(getenv('HTTP_X_FORWARDED_FOR') && strcasecmp(getenv('HTTP_X_FORWARDED_FOR'), $unknown)){
-            $realip = getenv("HTTP_X_FORWARDED_FOR");
-        }else if(getenv('HTTP_CLIENT_IP') && strcasecmp(getenv('HTTP_CLIENT_IP'), $unknown)){
-            $realip = getenv("HTTP_CLIENT_IP");
-        }else if(getenv('REMOTE_ADDR') && strcasecmp(getenv('REMOTE_ADDR'), $unknown)){
-            $realip = getenv("REMOTE_ADDR");
-        }else{
-            $realip = $unknown;
-        }
-    }
-    $realip = preg_match("/[\d\.]{7,15}/", $realip, $matches) ? $matches[0] : $unknown;
-    return $realip;
-}
+    $ip = "";
+    $proxyips = isset($_SERVER['HTTP_X_FORWARDED_FOR']) ? $_SERVER['HTTP_X_FORWARDED_FOR'] : "";
+    if(!$proxyips) $proxyips = isset($_SERVER['HTTP_X_REAL_IP']) ? $_SERVER['HTTP_X_REAL_IP'] : "";
+    if(!$proxyips) $proxyips = isset($_SERVER['HTTP_X_CLIENT_ADDRESS']) ? $_SERVER['HTTP_X_CLIENT_ADDRESS'] : "";
 
-webscan_for();
+    if ($proxyips) {//代理ＩＰ
+        $arrProxyIps = explode(',', $proxyips);
+        $ip = array_shift($arrProxyIps);
+    } else {
+        $ip = isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : "";
+    }
+
+    $ip = trim($ip);
+    return $ip;
+}
+webscan_for(); 
+
 
 ?>
